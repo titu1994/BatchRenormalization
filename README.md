@@ -32,10 +32,12 @@ There are several parameters that are present in addition to the parameters in B
 
 ```
 r_max_value: The clipped maximum value that the internal parameter 'r' can take. The value of r will be clipped in the range
-             (1 / r_max_value, r_max_value) after a sufficient number of iterations. The paper suggests a default value of 3.
+             (1 / r_max_value, r_max_value) after a sufficient number of iterations. 
+             The paper suggests a default value of 3.
              
 d_max_value: The clipped maximum value that the internal parameter 'd' can take. The value of d will be clipped in the range
-             (-d_max_value, d_max_value) after a sufficient number of iterations. The paper suggests a default value of 5.
+             (-d_max_value, d_max_value) after a sufficient number of iterations. 
+             The paper suggests a default value of 5.
              
 t_delta:     This parameter determines in how many iterations the internal r_max and d_max values will become equal to 
              r_max_value and d_max_value. 
@@ -53,6 +55,9 @@ t_delta:     This parameter determines in how many iterations the internal r_max
 
 # Requirements
 Keras 1.2.1 (will be updated when Keras 2 launches)
+
 Theano / Tensorflow
+
 h5py
+
 seaborn (optional, for plotting training graph)
