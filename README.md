@@ -27,6 +27,30 @@ However, the graphs compare WRN-16-4 model with Keras BatchNormalization (mode 0
 
 ![Training curve](https://github.com/titu1994/BatchRenormalization/blob/master/plots/batchnorm_vs_renorm.png?raw=true)
 
+# Parameters
+There are several parameters that are present in addition to the parameters in BatchNormalization layers.
+
+```
+r_max_value: The clipped maximum value that the internal parameter 'r' can take. The value of r will be clipped in the range
+             (1 / r_max_value, r_max_value) after a sufficient number of iterations. The paper suggests a default value of 3.
+             
+d_max_value: The clipped maximum value that the internal parameter 'd' can take. The value of d will be clipped in the range
+             (-d_max_value, d_max_value) after a sufficient number of iterations. The paper suggests a default value of 5.
+             
+t_delta:     This parameter determines in how many iterations the internal r_max and d_max values will become equal to 
+             r_max_value and d_max_value. 
+             
+             Default setting is 1, which means that in 5 iterations the internal parameters 
+             will become their maximum value.
+             
+             Values larger than 1 can cause gradient explosion, and prevent learning of anything useful.
+             
+             Using very small values will lead to slower learning, but eventually will lead to the same result as using 
+             t_delta = 1. 
+             
+             Sugggested t_delta values = 1 to 1e-3.
+```
+
 # Requirements
 Keras 1.2.1 (will be updated when Keras 2 launches)
 Theano / Tensorflow
