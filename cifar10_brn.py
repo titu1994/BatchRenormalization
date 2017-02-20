@@ -24,18 +24,18 @@ testY = kutils.to_categorical(testY)
 
 init_shape = (3, 32, 32) if K.image_dim_ordering() == 'th' else (32, 32, 3)
 
-model = WideResidualNetwork(depth=16, width=4, weights=None, classes=10, mode=2) # mode 2
+model = WideResidualNetwork(depth=16, width=4, weights=None, classes=10, mode=0)
 
 model.compile(loss="categorical_crossentropy", optimizer="adam", metrics=["accuracy"])
-model.load_weights('weights/Batch renorm Weights Mode 2.h5')
+model.load_weights('weights/Batch renorm Weights.h5')
 
 history = model.fit(trainX, trainY, batch_size, nb_epoch=nb_epoch,
                     callbacks=[
-                        callbacks.ModelCheckpoint("weights/Batch renorm Weights Mode 2.h5", monitor="val_acc", save_best_only=True,
+                        callbacks.ModelCheckpoint("weights/Batch renorm Weights.h5", monitor="val_acc", save_best_only=True,
                                                   save_weights_only=True)],
                     validation_data=(testX, testY))
 
-with open('history/batch_renorm_mode_2_history.txt', 'w') as f:
+with open('history/batch_renorm_history.txt', 'w') as f:
    json.dump(history.history, f)
 
 scores = model.evaluate(testX, testY, batch_size)

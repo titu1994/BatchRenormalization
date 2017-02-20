@@ -85,7 +85,7 @@ class BatchRenormalization(Layer):
         self.r_max_value = r_max_val
         self.d_max_value = d_max_val
         self.t_delta = t_delta
-        if self.mode == 0:
+        if self.mode == 0 or self.mode == 2:
             self.uses_learning_phase = True
         super(BatchRenormalization, self).__init__(**kwargs)
 
@@ -173,6 +173,26 @@ class BatchRenormalization(Layer):
             self.add_update([K.update(self.r_max, r_val),
                              K.update(self.d_max, d_val),
                              K.update(self.t, t_val)], x)
+
+            if sorted(reduction_axes) == range(K.ndim(x))[:-1]:
+                x_normed_running = K.batch_normalization(
+                    x, self.running_mean, self.running_std,
+                    self.beta, self.gamma,
+                    epsilon=self.epsilon)
+            else:
+                # need broadcasting
+                broadcast_running_mean = K.reshape(self.running_mean, broadcast_shape)
+                broadcast_running_std = K.reshape(self.running_std, broadcast_shape)
+                broadcast_beta = K.reshape(self.beta, broadcast_shape)
+                broadcast_gamma = K.reshape(self.gamma, broadcast_shape)
+                x_normed_running = K.batch_normalization(
+                    x, broadcast_running_mean, broadcast_running_std,
+                    broadcast_beta, broadcast_gamma,
+                    epsilon=self.epsilon)
+
+            # pick the normalized form of x corresponding to the training phase
+            # for batch renormalization, inference time remains same as batchnorm
+            x_normed = K.in_train_phase(x_normed, x_normed_running)
 
         elif self.mode == 1:
             # sample-wise normalization
