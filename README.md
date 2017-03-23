@@ -1,5 +1,5 @@
 # Batch Renormalization
-Batch Renormalization algorithm implementation in Keras 1.2.1. Original paper by Sergey Ioffe, [Batch Renormalization: Towards Reducing Minibatch Dependence in Batch-Normalized Models](https://arxiv.org/pdf/1702.03275.pdf).
+Batch Renormalization algorithm implementation in Keras 2.0+. Original paper by Sergey Ioffe, [Batch Renormalization: Towards Reducing Minibatch Dependence in Batch-Normalized Models](https://arxiv.org/pdf/1702.03275.pdf).
 
 # Usage
 Add the `batch_renorm.py` script into your repository, and import the BatchRenormalization layer.
