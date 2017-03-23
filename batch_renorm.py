@@ -1,17 +1,16 @@
 from keras.engine import Layer, InputSpec
-from keras import initializations, regularizers
+from keras import initializers, regularizers
 from keras import backend as K
+from keras.utils.generic_utils import get_custom_objects
 
 import numpy as np
 
 
 class BatchRenormalization(Layer):
     """Batch renormalization layer (Sergey Ioffe, 2017).
-
     Normalize the activations of the previous layer at each batch,
     i.e. applies a transformation that maintains the mean activation
     close to 0 and the activation standard deviation close to 1.
-
     # Arguments
         epsilon: small float > 0. Fuzz parameter.
             Theano expects epsilon >= 1e-5.
@@ -27,9 +26,9 @@ class BatchRenormalization(Layer):
                 During training and testing we use running averages
                 computed during the training phase to normalize the data
             - 1: sample-wise normalization. This mode assumes a 2D input.
-            - 2: feature-wise normalization - no difference to mode 0.
-                Parameter kept for easy of switching out BatchNormalization
-                with BatchRenormalization.
+            - 2: feature-wise normalization, like mode 0, but
+                using per-batch statistics to normalize the data during both
+                testing and training.
         axis: integer, axis along which to normalize in mode 0. For instance,
             if your input tensor has shape (samples, channels, rows, cols),
             set axis to 1 to normalize per feature map (channels axis).
@@ -44,37 +43,34 @@ class BatchRenormalization(Layer):
             `[(input_shape,), (input_shape,)]`
             Note that the order of this list is [gamma, beta, mean, std]
         beta_init: name of initialization function for shift parameter
-            (see [initializations](../initializations.md)), or alternatively,
+            (see [initializers](../initializers.md)), or alternatively,
             Theano/TensorFlow function to use for weights initialization.
             This parameter is only relevant if you don't pass a `weights` argument.
         gamma_init: name of initialization function for scale parameter (see
-            [initializations](../initializations.md)), or alternatively,
+            [initializers](../initializers.md)), or alternatively,
             Theano/TensorFlow function to use for weights initialization.
             This parameter is only relevant if you don't pass a `weights` argument.
         gamma_regularizer: instance of [WeightRegularizer](../regularizers.md)
             (eg. L1 or L2 regularization), applied to the gamma vector.
         beta_regularizer: instance of [WeightRegularizer](../regularizers.md),
             applied to the beta vector.
-
     # Input shape
         Arbitrary. Use the keyword argument `input_shape`
         (tuple of integers, does not include the samples axis)
         when using this layer as the first layer in a model.
-
     # Output shape
         Same shape as input.
-
     # References
         - [Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift](https://arxiv.org/abs/1502.03167)
     """
 
     def __init__(self, epsilon=1e-3, mode=0, axis=-1, momentum=0.99,
-                 r_max_val=3., d_max_val=5., t_delta=1., weights=None, beta_init='zero',
+                 r_max_value=3., d_max_value=5., t_delta=1., weights=None, beta_init='zero',
                  gamma_init='one', gamma_regularizer=None, beta_regularizer=None,
                  **kwargs):
         self.supports_masking = True
-        self.beta_init = initializations.get(beta_init)
-        self.gamma_init = initializations.get(gamma_init)
+        self.beta_init = initializers.get(beta_init)
+        self.gamma_init = initializers.get(gamma_init)
         self.epsilon = epsilon
         self.mode = mode
         self.axis = axis
@@ -82,10 +78,10 @@ class BatchRenormalization(Layer):
         self.gamma_regularizer = regularizers.get(gamma_regularizer)
         self.beta_regularizer = regularizers.get(beta_regularizer)
         self.initial_weights = weights
-        self.r_max_value = r_max_val
-        self.d_max_value = d_max_val
+        self.r_max_value = r_max_value
+        self.d_max_value = d_max_value
         self.t_delta = t_delta
-        if self.mode == 0 or self.mode == 2:
+        if self.mode == 0:
             self.uses_learning_phase = True
         super(BatchRenormalization, self).__init__(**kwargs)
 
@@ -130,20 +126,16 @@ class BatchRenormalization(Layer):
             broadcast_shape = [1] * len(input_shape)
             broadcast_shape[self.axis] = input_shape[self.axis]
 
-            if K.backend() == 'tf':
-                mean_batch, var = K.KTF.nn.moments(x, reduction_axes, shift=None, name=None, keep_dims=False)
-                std_batch = (K.sqrt(var + self.epsilon))
-            else:
-                mean_batch = K.mean(x, axis=reduction_axes)
-                std_batch = K.sqrt(K.var(x, axis=reduction_axes) + self.epsilon)
+            mean_batch, var_batch = K.moments(x, reduction_axes, shift=None, keep_dims=False)
+            std_batch = (K.sqrt(var_batch + self.epsilon))
 
-            r_max_val = K.get_value(self.r_max)
+            r_max_value = K.get_value(self.r_max)
             r = std_batch / (K.sqrt(self.running_std + self.epsilon))
-            r = K.stop_gradient(K.clip(r, 1 / r_max_val, r_max_val))
+            r = K.stop_gradient(K.clip(r, 1 / r_max_value, r_max_value))
 
-            d_max_val = K.get_value(self.d_max)
+            d_max_value = K.get_value(self.d_max)
             d = (mean_batch - self.running_mean) / K.sqrt(self.running_std + self.epsilon)
-            d = K.stop_gradient(K.clip(d, -d_max_val, d_max_val))
+            d = K.stop_gradient(K.clip(d, -d_max_value, d_max_value))
 
             if sorted(reduction_axes) == range(K.ndim(x))[:-1]:
                 x_normed_batch = (x - mean_batch) / std_batch
@@ -174,25 +166,26 @@ class BatchRenormalization(Layer):
                              K.update(self.d_max, d_val),
                              K.update(self.t, t_val)], x)
 
-            if sorted(reduction_axes) == range(K.ndim(x))[:-1]:
-                x_normed_running = K.batch_normalization(
-                    x, self.running_mean, self.running_std,
-                    self.beta, self.gamma,
-                    epsilon=self.epsilon)
-            else:
-                # need broadcasting
-                broadcast_running_mean = K.reshape(self.running_mean, broadcast_shape)
-                broadcast_running_std = K.reshape(self.running_std, broadcast_shape)
-                broadcast_beta = K.reshape(self.beta, broadcast_shape)
-                broadcast_gamma = K.reshape(self.gamma, broadcast_shape)
-                x_normed_running = K.batch_normalization(
-                    x, broadcast_running_mean, broadcast_running_std,
-                    broadcast_beta, broadcast_gamma,
-                    epsilon=self.epsilon)
+            if self.mode == 0:
+                if sorted(reduction_axes) == range(K.ndim(x))[:-1]:
+                    x_normed_running = K.batch_normalization(
+                        x, self.running_mean, self.running_std,
+                        self.beta, self.gamma,
+                        epsilon=self.epsilon)
+                else:
+                    # need broadcasting
+                    broadcast_running_mean = K.reshape(self.running_mean, broadcast_shape)
+                    broadcast_running_std = K.reshape(self.running_std, broadcast_shape)
+                    broadcast_beta = K.reshape(self.beta, broadcast_shape)
+                    broadcast_gamma = K.reshape(self.gamma, broadcast_shape)
+                    x_normed_running = K.batch_normalization(
+                        x, broadcast_running_mean, broadcast_running_std,
+                        broadcast_beta, broadcast_gamma,
+                        epsilon=self.epsilon)
 
-            # pick the normalized form of x corresponding to the training phase
-            # for batch renormalization, inference time remains same as batchnorm
-            x_normed = K.in_train_phase(x_normed, x_normed_running)
+                # pick the normalized form of x corresponding to the training phase
+                # for batch renormalization, inference time remains same as batchnorm
+                x_normed = K.in_train_phase(x_normed, x_normed_running)
 
         elif self.mode == 1:
             # sample-wise normalization
@@ -200,13 +193,13 @@ class BatchRenormalization(Layer):
             std = K.sqrt(K.var(x, axis=self.axis, keepdims=True) + self.epsilon)
             x_normed_batch = (x - m) / (std + self.epsilon)
 
-            r_max_val = K.get_value(self.r_max)
+            r_max_value = K.get_value(self.r_max)
             r = std / (self.running_std + self.epsilon)
-            r = K.stop_gradient(K.clip(r, 1 / r_max_val, r_max_val))
+            r = K.stop_gradient(K.clip(r, 1 / r_max_value, r_max_value))
 
-            d_max_val = K.get_value(self.d_max)
+            d_max_value = K.get_value(self.d_max)
             d = (m - self.running_mean) / (self.running_std + self.epsilon)
-            d = K.stop_gradient(K.clip(d, -d_max_val, d_max_val))
+            d = K.stop_gradient(K.clip(d, -d_max_value, d_max_value))
 
             x_normed = ((x_normed_batch * r) + d) * self.gamma + self.beta
 
@@ -214,7 +207,7 @@ class BatchRenormalization(Layer):
             t_val = K.get_value(self.t)
             r_val = self.r_max_value / (1 + (self.r_max_value - 1) * np.exp(-t_val))
             d_val = self.d_max_value / (1 + ((self.d_max_value / 1e-3) - 1) * np.exp(-(2 * t_val)))
-            t_val += 1.
+            t_val += float(self.t_delta)
 
             self.add_update([K.update(self.r_max, r_val),
                              K.update(self.d_max, d_val),
@@ -226,11 +219,13 @@ class BatchRenormalization(Layer):
         config = {'epsilon': self.epsilon,
                   'mode': self.mode,
                   'axis': self.axis,
-                  'gamma_regularizer': self.gamma_regularizer.get_config() if self.gamma_regularizer else None,
-                  'beta_regularizer': self.beta_regularizer.get_config() if self.beta_regularizer else None,
+                  'gamma_regularizer': regularizers.serialize(self.gamma_regularizer),
+                  'beta_regularizer': regularizers.serialize(self.beta_regularizer),
                   'momentum': self.momentum,
                   'r_max_value': self.r_max_value,
                   'd_max_value': self.d_max_value,
                   't_delta': self.t_delta}
         base_config = super(BatchRenormalization, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+get_custom_objects().update({'BatchRenormalization': BatchRenormalization})
