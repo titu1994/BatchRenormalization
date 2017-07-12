@@ -61,6 +61,7 @@ class BatchRenormalization(Layer):
     # Output shape
         Same shape as input.
     # References
+        - [Batch Renormalization: Towards Reducing Minibatch Dependence in Batch-Normalized Models](https://arxiv.org/abs/1702.03275)
         - [Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift](https://arxiv.org/abs/1502.03167)
     """
 
