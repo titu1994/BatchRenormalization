@@ -6,6 +6,20 @@ from keras.utils.generic_utils import get_custom_objects
 import numpy as np
 
 
+def _moments(x, axes, shift=None, keep_dims=False):
+    ''' Wrapper over tensorflow backend call '''
+    if K.backend() == 'tensorflow':
+        import tensorflow as tf
+        return tf.nn.moments(x, axes, shift=shift, keep_dims=keep_dims)
+    elif K.backend() == 'theano':
+        import theano.tensor as T
+
+        mean_batch = T.mean(x, axis=axes, keepdims=keep_dims)
+        var_batch = T.var(x, axis=axes, keepdims=keep_dims)
+        return mean_batch, var_batch
+    else:
+        raise RuntimeError("Currently does not support CNTK backend")
+
 class BatchRenormalization(Layer):
     """Batch renormalization layer (Sergey Ioffe, 2017).
     Normalize the activations of the previous layer at each batch,
@@ -127,7 +141,7 @@ class BatchRenormalization(Layer):
             broadcast_shape = [1] * len(input_shape)
             broadcast_shape[self.axis] = input_shape[self.axis]
 
-            mean_batch, var_batch = K.moments(x, reduction_axes, shift=None, keep_dims=False)
+            mean_batch, var_batch = _moments(x, reduction_axes, shift=None, keep_dims=False)
             std_batch = (K.sqrt(var_batch + self.epsilon))
 
             r_max_value = K.get_value(self.r_max)
