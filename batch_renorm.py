@@ -80,7 +80,7 @@ class BatchRenormalization(Layer):
     """
 
     def __init__(self, epsilon=1e-3, mode=0, axis=-1, momentum=0.99,
-                 r_max_value=3., d_max_value=5., t_delta=1., weights=None, beta_init='zero',
+                 r_max_value=3., d_max_value=5., t_delta=1e-3, weights=None, beta_init='zero',
                  gamma_init='one', gamma_regularizer=None, beta_regularizer=None,
                  **kwargs):
         self.supports_masking = True
@@ -172,14 +172,12 @@ class BatchRenormalization(Layer):
                              K.moving_average_update(self.running_std, std_batch ** 2, self.momentum)], x)
 
             # update r_max and d_max
-            t_val = K.get_value(self.t)
-            r_val = self.r_max_value / (1 + (self.r_max_value - 1) * np.exp(-t_val))
-            d_val = self.d_max_value / (1 + ((self.d_max_value / 1e-3) - 1) * np.exp(-(2 * t_val)))
-            t_val += float(self.t_delta)
+            r_val = self.r_max_value / (1 + (self.r_max_value - 1) * K.exp(-self.t))
+            d_val = self.d_max_value / (1 + ((self.d_max_value / 1e-3) - 1) * K.exp(-(2 * self.t)))
 
             self.add_update([K.update(self.r_max, r_val),
                              K.update(self.d_max, d_val),
-                             K.update(self.t, t_val)], x)
+                             K.update_add(self.t, K.variable(np.array([self.t_delta])))], x)
 
             if self.mode == 0:
                 if sorted(reduction_axes) == range(K.ndim(x))[:-1]:
