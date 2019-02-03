@@ -3,6 +3,8 @@ from keras import initializers, regularizers, constraints
 from keras.engine import Layer, InputSpec
 from keras.utils.generic_utils import get_custom_objects
 
+import warnings
+
 
 def _moments(x, axes, shift=None, keep_dims=False):
     ''' Wrapper over tensorflow backend call '''
@@ -91,6 +93,12 @@ class BatchRenormalization(Layer):
             raise NotImplementedError('There is currently a bug '
                                       'when using batch renormalisation and '
                                       'the TensorFlow backend.')
+
+        warnings.warn('This implementation of BatchRenormalization is inconsistent with the '
+                      'original paper and therefore results may not be similar ! '
+                      'For discussion on the inconsistency of this implementation, '
+                      'refer here : https://github.com/keras-team/keras-contrib/issues/17')
+
         self.supports_masking = True
         self.axis = axis
         self.epsilon = epsilon
